@@ -278,10 +278,9 @@ def process_csv(input_file: str, output_file: str):
         else:
             output_row['PRIMARY_PHONE'] = ''
         
-        # Add phone DNC flags
-        if unique_pairs:
-            for i in range(min(len(unique_pairs), 200)):
-                output_row[f'PHONE_DNC_{i + 1}'] = unique_pairs[i][1] or 'N'
+        # Add only the first phone DNC flag (one column)
+        if unique_pairs and unique_pairs[0][1]:
+            output_row['PHONE_DNC'] = unique_pairs[0][1]
         
         # Add emails
         emails_list = list(person['emails'])
@@ -314,12 +313,12 @@ def process_csv(input_file: str, output_file: str):
     # Sort fields: put standard fields first, then others
     standard_fields = ['FIRST_NAME', 'LAST_NAME', 'PRIMARY_PHONE', 'PRIMARY_EMAIL']
     email_fields = sorted([f for f in all_fields if f.startswith('EMAIL_')])
-    phone_fields = sorted([f for f in all_fields if f.startswith('PHONE_') and not f.startswith('PHONE_DNC_')])
-    dnc_fields = sorted([f for f in all_fields if f.startswith('PHONE_DNC_')])
-    other_fields = sorted([f for f in all_fields if f not in standard_fields + email_fields + phone_fields + dnc_fields])
+    phone_fields = sorted([f for f in all_fields if f.startswith('PHONE_') and not f.startswith('PHONE_DNC')])
+    dnc_field = ['PHONE_DNC'] if 'PHONE_DNC' in all_fields else []
+    other_fields = sorted([f for f in all_fields if f not in standard_fields + email_fields + phone_fields + dnc_field])
     
-    # Order: standard, emails, phones, DNC flags, others
-    fieldnames_output = standard_fields + email_fields + phone_fields + dnc_fields + other_fields
+    # Order: standard, emails, phones, DNC field, others
+    fieldnames_output = standard_fields + email_fields + phone_fields + dnc_field + other_fields
     
     with open(output_file, 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames_output, extrasaction='ignore')
