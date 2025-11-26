@@ -108,13 +108,15 @@ def process_csv(input_file: str, output_file: str):
         'CITY': '',
         'STATE': '',
         'ZIP': '',
-        'direct_phone': None,  # From DIRECT_NUMBER
-        'mobile_phone': None,  # From MOBILE_PHONE
-        'personal_phone': None,  # From PERSONAL_PHONE
-        'personal_email': None,
-        'business_email': None,
-        'phone_dnc': None,  # DNC value for direct phone
-        'other_data': {}
+        'direct_phone': '',  # From DIRECT_NUMBER - empty string if not found
+        'mobile_phone': '',  # From MOBILE_PHONE - empty string if not found
+        'personal_phone': '',  # From PERSONAL_PHONE - empty string if not found
+        'personal_email': '',
+        'business_email': '',
+        'phone_dnc': '',  # DNC value for direct phone
+        'found_direct': False,  # Track if we've found direct phone
+        'found_mobile': False,  # Track if we've found mobile phone
+        'found_personal': False,  # Track if we've found personal phone
     })
     
     # Read and process input CSV
@@ -166,41 +168,47 @@ def process_csv(input_file: str, output_file: str):
             if not person['ZIP']:
                 person['ZIP'] = clean_value(row.get('PERSONAL_ZIP', ''))
             
-            # Extract DIRECT_NUMBER (direct phone) - only from DIRECT_NUMBER field
-            direct_number = row.get('DIRECT_NUMBER', '')
-            if direct_number and not person['direct_phone']:
-                phones = extract_multiple(direct_number)
-                for phone_str in phones:
-                    cleaned_phone = clean_phone(phone_str)
-                    if cleaned_phone:
-                        person['direct_phone'] = cleaned_phone
-                        # Get DNC value for direct phone
-                        direct_dnc = row.get('DIRECT_NUMBER_DNC', '').strip().upper()
-                        if direct_dnc:
-                            dnc_flags = extract_multiple(direct_dnc)
-                            if dnc_flags:
-                                person['phone_dnc'] = dnc_flags[0]
-                        break
+            # Extract DIRECT_NUMBER (direct phone) - ONLY from DIRECT_NUMBER field
+            if not person['found_direct']:
+                direct_number = row.get('DIRECT_NUMBER', '')
+                if direct_number:
+                    phones = extract_multiple(direct_number)
+                    for phone_str in phones:
+                        cleaned_phone = clean_phone(phone_str)
+                        if cleaned_phone:
+                            person['direct_phone'] = cleaned_phone
+                            person['found_direct'] = True
+                            # Get DNC value for direct phone
+                            direct_dnc = row.get('DIRECT_NUMBER_DNC', '').strip().upper()
+                            if direct_dnc:
+                                dnc_flags = extract_multiple(direct_dnc)
+                                if dnc_flags:
+                                    person['phone_dnc'] = dnc_flags[0]
+                            break
             
-            # Extract MOBILE_PHONE - only from MOBILE_PHONE field
-            mobile_number = row.get('MOBILE_PHONE', '')
-            if mobile_number and not person['mobile_phone']:
-                phones = extract_multiple(mobile_number)
-                for phone_str in phones:
-                    cleaned_phone = clean_phone(phone_str)
-                    if cleaned_phone:
-                        person['mobile_phone'] = cleaned_phone
-                        break
+            # Extract MOBILE_PHONE - ONLY from MOBILE_PHONE field
+            if not person['found_mobile']:
+                mobile_number = row.get('MOBILE_PHONE', '')
+                if mobile_number:
+                    phones = extract_multiple(mobile_number)
+                    for phone_str in phones:
+                        cleaned_phone = clean_phone(phone_str)
+                        if cleaned_phone:
+                            person['mobile_phone'] = cleaned_phone
+                            person['found_mobile'] = True
+                            break
             
-            # Extract PERSONAL_PHONE - only from PERSONAL_PHONE field
-            personal_number = row.get('PERSONAL_PHONE', '')
-            if personal_number and not person['personal_phone']:
-                phones = extract_multiple(personal_number)
-                for phone_str in phones:
-                    cleaned_phone = clean_phone(phone_str)
-                    if cleaned_phone:
-                        person['personal_phone'] = cleaned_phone
-                        break
+            # Extract PERSONAL_PHONE - ONLY from PERSONAL_PHONE field
+            if not person['found_personal']:
+                personal_number = row.get('PERSONAL_PHONE', '')
+                if personal_number:
+                    phones = extract_multiple(personal_number)
+                    for phone_str in phones:
+                        cleaned_phone = clean_phone(phone_str)
+                        if cleaned_phone:
+                            person['personal_phone'] = cleaned_phone
+                            person['found_personal'] = True
+                            break
             
             # Extract emails - separate personal and business
             if not person['personal_email'] or not person['business_email']:
