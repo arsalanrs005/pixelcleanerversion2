@@ -166,44 +166,41 @@ def process_csv(input_file: str, output_file: str):
             if not person['ZIP']:
                 person['ZIP'] = clean_value(row.get('PERSONAL_ZIP', ''))
             
-            # Extract DIRECT_NUMBER (direct phone)
-            if not person['direct_phone']:
-                direct_number = row.get('DIRECT_NUMBER', '')
-                if direct_number:
-                    phones = extract_multiple(direct_number)
-                    for phone_str in phones:
-                        cleaned_phone = clean_phone(phone_str)
-                        if cleaned_phone:
-                            person['direct_phone'] = cleaned_phone
-                            # Get DNC value for direct phone
-                            direct_dnc = row.get('DIRECT_NUMBER_DNC', '').strip().upper()
-                            if direct_dnc:
-                                dnc_flags = extract_multiple(direct_dnc)
-                                if dnc_flags:
-                                    person['phone_dnc'] = dnc_flags[0]
-                            break
+            # Extract DIRECT_NUMBER (direct phone) - only from DIRECT_NUMBER field
+            direct_number = row.get('DIRECT_NUMBER', '')
+            if direct_number and not person['direct_phone']:
+                phones = extract_multiple(direct_number)
+                for phone_str in phones:
+                    cleaned_phone = clean_phone(phone_str)
+                    if cleaned_phone:
+                        person['direct_phone'] = cleaned_phone
+                        # Get DNC value for direct phone
+                        direct_dnc = row.get('DIRECT_NUMBER_DNC', '').strip().upper()
+                        if direct_dnc:
+                            dnc_flags = extract_multiple(direct_dnc)
+                            if dnc_flags:
+                                person['phone_dnc'] = dnc_flags[0]
+                        break
             
-            # Extract MOBILE_PHONE (first one)
-            if not person['mobile_phone']:
-                mobile_number = row.get('MOBILE_PHONE', '')
-                if mobile_number:
-                    phones = extract_multiple(mobile_number)
-                    for phone_str in phones:
-                        cleaned_phone = clean_phone(phone_str)
-                        if cleaned_phone:
-                            person['mobile_phone'] = cleaned_phone
-                            break
+            # Extract MOBILE_PHONE - only from MOBILE_PHONE field
+            mobile_number = row.get('MOBILE_PHONE', '')
+            if mobile_number and not person['mobile_phone']:
+                phones = extract_multiple(mobile_number)
+                for phone_str in phones:
+                    cleaned_phone = clean_phone(phone_str)
+                    if cleaned_phone:
+                        person['mobile_phone'] = cleaned_phone
+                        break
             
-            # Extract PERSONAL_PHONE (first one)
-            if not person['personal_phone']:
-                personal_number = row.get('PERSONAL_PHONE', '')
-                if personal_number:
-                    phones = extract_multiple(personal_number)
-                    for phone_str in phones:
-                        cleaned_phone = clean_phone(phone_str)
-                        if cleaned_phone:
-                            person['personal_phone'] = cleaned_phone
-                            break
+            # Extract PERSONAL_PHONE - only from PERSONAL_PHONE field
+            personal_number = row.get('PERSONAL_PHONE', '')
+            if personal_number and not person['personal_phone']:
+                phones = extract_multiple(personal_number)
+                for phone_str in phones:
+                    cleaned_phone = clean_phone(phone_str)
+                    if cleaned_phone:
+                        person['personal_phone'] = cleaned_phone
+                        break
             
             # Extract emails - separate personal and business
             if not person['personal_email'] or not person['business_email']:
