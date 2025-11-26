@@ -58,38 +58,56 @@ The cleaned CSV includes:
 
 ## Deployment on Render
 
-1. Upload this script to your Render service
-2. Install dependencies (none required - uses standard library)
-3. Run via command line or integrate into your web service
+### Quick Deploy
 
-### Example Render Service (Flask)
+1. **Connect your GitHub repository** to Render:
+   - Go to https://render.com
+   - Create a new Web Service
+   - Connect your GitHub account
+   - Select the `pixelcleaner-deduplication` repository
 
-```python
-from flask import Flask, request, send_file
-import subprocess
-import os
+2. **Configure the service**:
+   - **Name**: `pixelcleaner` (or your preferred name)
+   - **Environment**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `python app.py`
+   - **Plan**: Free tier is sufficient for testing
 
-app = Flask(__name__)
+3. **Deploy**: Render will automatically deploy your service
 
-@app.route('/clean', methods=['POST'])
-def clean_csv():
-    if 'file' not in request.files:
-        return {'error': 'No file provided'}, 400
-    
-    input_file = request.files['file']
-    input_path = f"/tmp/{input_file.filename}"
-    output_path = f"/tmp/cleaned_{input_file.filename}"
-    
-    input_file.save(input_path)
-    
-    # Run the cleaner
-    subprocess.run(['python', 'pixelcleaner.py', input_path, output_path])
-    
-    return send_file(output_path, as_attachment=True)
+### API Usage
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+Once deployed, you can use the API:
+
+**Health Check:**
+```bash
+curl https://your-service.onrender.com/health
 ```
+
+**Clean CSV:**
+```bash
+curl -X POST \
+  -F "file=@your-input.csv" \
+  https://your-service.onrender.com/clean \
+  --output cleaned_output.csv
+```
+
+**Python Example:**
+```python
+import requests
+
+url = "https://your-service.onrender.com/clean"
+with open("input.csv", "rb") as f:
+    response = requests.post(url, files={"file": f})
+    with open("cleaned.csv", "wb") as out:
+        out.write(response.content)
+```
+
+### Manual Deployment
+
+Alternatively, you can deploy the script as a background service:
+- Use the command: `python pixelcleaner.py input.csv output.csv`
+- Configure as a Background Worker on Render
 
 ## Notes
 
