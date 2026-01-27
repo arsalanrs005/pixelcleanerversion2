@@ -58,22 +58,61 @@ The cleaned CSV includes:
 
 ## Deployment on Render
 
-### Quick Deploy
+### Step-by-Step Guide
 
-1. **Connect your GitHub repository** to Render:
-   - Go to https://render.com
-   - Create a new Web Service
-   - Connect your GitHub account
-   - Select the `pixelcleaner-deduplication` repository
+#### Option 1: Using Render Dashboard (Recommended)
 
-2. **Configure the service**:
+1. **Push your code to GitHub**:
+   ```bash
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git remote add origin https://github.com/yourusername/pixelcleanerac.git
+   git push -u origin main
+   ```
+
+2. **Go to Render Dashboard**:
+   - Visit https://dashboard.render.com
+   - Sign up or log in (you can use GitHub to sign in)
+
+3. **Create a New Web Service**:
+   - Click "New +" → "Web Service"
+   - Connect your GitHub account if not already connected
+   - Select your repository (`pixelcleanerac`)
+
+4. **Configure the service**:
    - **Name**: `pixelcleaner` (or your preferred name)
+   - **Region**: Choose closest to your users
+   - **Branch**: `main` (or your default branch)
+   - **Root Directory**: Leave empty (or `.` if needed)
    - **Environment**: `Python 3`
    - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `python app.py`
+   - **Start Command**: `gunicorn app:app`
    - **Plan**: Free tier is sufficient for testing
 
-3. **Deploy**: Render will automatically deploy your service
+5. **Deploy**: Click "Create Web Service" - Render will automatically deploy your service
+
+#### Option 2: Using render.yaml (Automatic)
+
+If you have `render.yaml` in your repository (which you do!), Render will automatically detect it:
+
+1. **Push your code to GitHub** (same as Option 1, step 1)
+
+2. **Go to Render Dashboard**:
+   - Visit https://dashboard.render.com
+   - Click "New +" → "Blueprint"
+
+3. **Connect Repository**:
+   - Select your GitHub repository
+   - Render will automatically read `render.yaml` and configure everything
+
+4. **Deploy**: Click "Apply" - Render will create the service with the settings from `render.yaml`
+
+### After Deployment
+
+- Your app will be available at: `https://pixelcleaner.onrender.com` (or your custom name)
+- First deployment may take 5-10 minutes
+- Free tier services spin down after 15 minutes of inactivity (takes ~30 seconds to wake up)
 
 ### API Usage
 

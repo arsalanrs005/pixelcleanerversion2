@@ -8,6 +8,7 @@ import subprocess
 import os
 import tempfile
 import uuid
+import re
 
 app = Flask(__name__)
 
@@ -23,8 +24,8 @@ def health():
 def clean_csv():
     """
     Clean CSV endpoint
-    Accepts a CSV file via POST request
-    Returns cleaned CSV file
+    Accepts a CSV file via POST request and optional filename
+    Returns cleaned CSV file with user-specified name
     """
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided. Please upload a CSV file with "file" field.'}), 400
@@ -34,8 +35,26 @@ def clean_csv():
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
     
-    if not file.filename.endswith('.csv'):
-        return jsonify({'error': 'File must be a CSV file'}), 400
+    # Accept both .csv and .ai files (since healospixel.ai is actually a CSV)
+    if not (file.filename.endswith('.csv') or file.filename.endswith('.ai')):
+        return jsonify({'error': 'File must be a CSV file (.csv or .ai)'}), 400
+    
+    # Get custom filename from form data
+    custom_filename = request.form.get('filename', '').strip()
+    
+    # Sanitize filename - remove any path components and ensure it ends with .csv
+    if custom_filename:
+        # Remove any directory separators and dangerous characters
+        custom_filename = os.path.basename(custom_filename)
+        # Remove any non-alphanumeric characters except dots, dashes, and underscores
+        custom_filename = re.sub(r'[^a-zA-Z0-9._-]', '', custom_filename)
+        # Ensure it ends with .csv
+        if not custom_filename.endswith('.csv'):
+            custom_filename = custom_filename + '.csv'
+    else:
+        # Default filename based on input file
+        base_name = os.path.splitext(file.filename)[0]
+        custom_filename = f'{base_name}_cleaned.csv'
     
     # Create temporary directory for processing
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -67,12 +86,12 @@ def clean_csv():
                     'details': result.stdout
                 }), 500
             
-            # Return the cleaned file
+            # Return the cleaned file with user-specified filename
             return send_file(
                 output_path,
                 mimetype='text/csv',
                 as_attachment=True,
-                download_name='cleaned_output.csv'
+                download_name=custom_filename
             )
         
         except subprocess.TimeoutExpired:

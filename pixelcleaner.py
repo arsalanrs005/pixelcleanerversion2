@@ -95,6 +95,62 @@ def extract_date_from_timestamp(timestamp: str) -> str:
         return timestamp.split()[0] if timestamp else ''
 
 
+def parse_timestamp(timestamp: str) -> Optional[datetime]:
+    """Parse timestamp string to datetime object."""
+    if not timestamp:
+        return None
+    
+    try:
+        # Try ISO format (2026-01-21T10:57:56Z)
+        if 'T' in timestamp:
+            # Remove 'Z' if present and parse
+            timestamp_clean = timestamp.replace('Z', '+00:00')
+            if timestamp_clean.endswith('+00:00'):
+                return datetime.fromisoformat(timestamp_clean)
+            # Try without timezone
+            timestamp_clean = timestamp.split('Z')[0]
+            return datetime.fromisoformat(timestamp_clean)
+        return None
+    except:
+        return None
+
+
+def calculate_time_spent(first_time: Optional[datetime], last_time: Optional[datetime]) -> str:
+    """Calculate time difference between first and last occurrence."""
+    if not first_time or not last_time:
+        return ''
+    
+    try:
+        delta = last_time - first_time
+        total_seconds = int(delta.total_seconds())
+        
+        if total_seconds < 60:
+            return f"{total_seconds} seconds"
+        elif total_seconds < 3600:
+            minutes = total_seconds // 60
+            return f"{minutes} minutes"
+        elif total_seconds < 86400:
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            return f"{hours} hours {minutes} minutes"
+        else:
+            days = total_seconds // 86400
+            hours = (total_seconds % 86400) // 3600
+            return f"{days} days {hours} hours"
+    except:
+        return ''
+
+
+def get_interest_level(occurrence_count: int) -> str:
+    """Determine interest level based on occurrence count."""
+    if occurrence_count > 4:
+        return 'Highly Interested'
+    elif occurrence_count >= 2:
+        return 'Medium'
+    else:
+        return 'Not Interested'
+
+
 def process_csv(input_file: str, output_file: str):
     """Process CSV file and generate cleaned output."""
     print('🟢 PIXEL CLEANER ACTIVATED')
@@ -114,6 +170,10 @@ def process_csv(input_file: str, output_file: str):
         'direct_dnc_flags': [],  # DNC flags for direct phones
         'personal_email': '',
         'business_email': '',
+        'linkedin_url': '',  # LinkedIn URL
+        'occurrence_count': 0,  # Count of duplicate occurrences
+        'first_timestamp': None,  # First occurrence timestamp
+        'last_timestamp': None,  # Last occurrence timestamp
     })
     
     # Read and process input CSV
@@ -144,6 +204,9 @@ def process_csv(input_file: str, output_file: str):
             key = f"{first_name}|{last_name}"
             person = people_map[key]
             
+            # Increment occurrence count
+            person['occurrence_count'] += 1
+            
             # Store names
             if not person['FIRST_NAME']:
                 person['FIRST_NAME'] = row.get('FIRST_NAME', '')
@@ -151,9 +214,25 @@ def process_csv(input_file: str, output_file: str):
             
             # Extract date from ActivityStartDate (first occurrence)
             if not person['DATE']:
-                activity_date = row.get('ActivityStartDate', '')
+                activity_date = row.get('ACTIVITY_START_DATE', '') or row.get('ActivityStartDate', '')
                 if activity_date:
                     person['DATE'] = extract_date_from_timestamp(activity_date)
+            
+            # Track timestamps for time spent calculation
+            timestamp_str = row.get('ACTIVITY_START_DATE', '') or row.get('EVENT_TIMESTAMP', '')
+            if timestamp_str:
+                timestamp = parse_timestamp(timestamp_str)
+                if timestamp:
+                    if person['first_timestamp'] is None or timestamp < person['first_timestamp']:
+                        person['first_timestamp'] = timestamp
+                    if person['last_timestamp'] is None or timestamp > person['last_timestamp']:
+                        person['last_timestamp'] = timestamp
+            
+            # Extract LinkedIn URL (first occurrence)
+            if not person['linkedin_url']:
+                linkedin = row.get('LINKEDIN_URL', '').strip()
+                if linkedin:
+                    person['linkedin_url'] = linkedin
             
             # Extract address fields (first occurrence)
             if not person['ADDRESS']:
@@ -267,6 +346,12 @@ def process_csv(input_file: str, output_file: str):
             if not personal_phone:
                 personal_phone = person['personal_phones'][0]
         
+        # Calculate time spent
+        time_spent = calculate_time_spent(person['first_timestamp'], person['last_timestamp'])
+        
+        # Get interest level
+        interest_level = get_interest_level(person['occurrence_count'])
+        
         output_row = {
             'Date': person['DATE'],
             'First Name': person['FIRST_NAME'],
@@ -280,6 +365,10 @@ def process_csv(input_file: str, output_file: str):
             'Personal Phone': personal_phone,
             'Personal Email': person['personal_email'] or '',
             'Business Email': person['business_email'] or '',
+            'LinkedIn URL': person['linkedin_url'] or '',
+            'Duplicate Occurrences': str(person['occurrence_count']),
+            'Time Spent on Website': time_spent,
+            'Interest Level': interest_level,
         }
         
         output_rows.append(output_row)
@@ -297,7 +386,11 @@ def process_csv(input_file: str, output_file: str):
         'Mobile Phone',
         'Personal Phone',
         'Personal Email',
-        'Business Email'
+        'Business Email',
+        'LinkedIn URL',
+        'Duplicate Occurrences',
+        'Time Spent on Website',
+        'Interest Level'
     ]
     
     print(f'💾 Writing output file: {output_file}')

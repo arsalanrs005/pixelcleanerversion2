@@ -246,6 +246,41 @@
             background: #38a169;
             box-shadow: 0 6px 20px rgba(72, 187, 120, 0.5);
         }
+
+        .filename-input-container {
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .filename-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+
+        .filename-input {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .filename-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .filename-hint {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -259,7 +294,7 @@
         <div class="upload-area" id="uploadArea">
             <div class="upload-icon">📄</div>
             <div class="upload-text">Drag & drop your CSV file here</div>
-            <input type="file" id="fileInput" class="file-input" accept=".csv">
+            <input type="file" id="fileInput" class="file-input" accept=".csv,.ai">
         </div>
 
         <div class="file-info" id="fileInfo">
@@ -272,6 +307,22 @@
         <button class="btn btn-choose" onclick="document.getElementById('fileInput').click()">
             Choose File
         </button>
+
+        <div class="filename-input-container" id="filenameContainer" style="display: none;">
+            <label class="filename-label" for="filenameInput">
+                Output File Name (optional)
+            </label>
+            <input 
+                type="text" 
+                id="filenameInput" 
+                class="filename-input" 
+                placeholder="e.g., my_cleaned_data.csv"
+                maxlength="100"
+            >
+            <div class="filename-hint">
+                Leave empty to use default name. File will be saved as .csv
+            </div>
+        </div>
 
         <button class="btn btn-process" id="processBtn" onclick="processFile()" disabled>
             Process File
@@ -315,6 +366,8 @@
         const successMessage = document.getElementById('successMessage');
         const errorMessage = document.getElementById('errorMessage');
         const errorText = document.getElementById('errorText');
+        const filenameInput = document.getElementById('filenameInput');
+        const filenameContainer = document.getElementById('filenameContainer');
 
         // Drag and drop handlers
         uploadArea.addEventListener('dragover', (e) => {
@@ -346,8 +399,8 @@
         });
 
         function handleFileSelect(file) {
-            if (!file.name.endsWith('.csv')) {
-                showError('Please select a CSV file.');
+            if (!file.name.endsWith('.csv') && !file.name.endsWith('.ai')) {
+                showError('Please select a CSV file (.csv or .ai).');
                 return;
             }
 
@@ -355,6 +408,12 @@
             fileName.textContent = file.name;
             fileSize.textContent = formatFileSize(file.size);
             fileInfo.classList.add('show');
+            filenameContainer.style.display = 'block';
+            
+            // Set default filename suggestion
+            const baseName = file.name.replace(/\.(csv|ai)$/i, '');
+            filenameInput.value = baseName + '_cleaned.csv';
+            
             processBtn.disabled = false;
             successMessage.classList.remove('show');
             errorMessage.classList.remove('show');
@@ -383,6 +442,12 @@
 
             const formData = new FormData();
             formData.append('file', selectedFile);
+            
+            // Add custom filename if provided
+            const customFilename = filenameInput.value.trim();
+            if (customFilename) {
+                formData.append('filename', customFilename);
+            }
 
             try {
                 progressFill.style.width = '50%';
@@ -406,7 +471,10 @@
 
                 // Get the file blob
                 processedFileBlob = await response.blob();
-                processedFileName = selectedFile.name.replace('.csv', '_cleaned.csv');
+                
+                // Use custom filename if provided, otherwise use default
+                const customFilename = filenameInput.value.trim();
+                processedFileName = customFilename || selectedFile.name.replace(/\.(csv|ai)$/i, '_cleaned.csv');
 
                 // Show success message
                 setTimeout(() => {
@@ -434,7 +502,12 @@
             const url = window.URL.createObjectURL(processedFileBlob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = processedFileName || 'cleaned_output.csv';
+            // Ensure filename ends with .csv
+            let downloadName = processedFileName || 'cleaned_output.csv';
+            if (!downloadName.endsWith('.csv')) {
+                downloadName = downloadName + '.csv';
+            }
+            a.download = downloadName;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
