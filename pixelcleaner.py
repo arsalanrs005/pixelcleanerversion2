@@ -77,24 +77,6 @@ def is_personal_email(email: str) -> bool:
     return any(domain in email_lower for domain in personal_domains)
 
 
-def extract_date_from_timestamp(timestamp: str) -> str:
-    """Extract date (YYYY-MM-DD) from ActivityStartDate timestamp."""
-    if not timestamp:
-        return ''
-    
-    try:
-        # Try ISO format first (2025-09-29T17:59:07Z)
-        if 'T' in timestamp:
-            date_part = timestamp.split('T')[0]
-            # Validate date format
-            datetime.strptime(date_part, '%Y-%m-%d')
-            return date_part
-        # Try other formats if needed
-        return timestamp.split()[0] if timestamp else ''
-    except:
-        return timestamp.split()[0] if timestamp else ''
-
-
 def parse_timestamp(timestamp: str) -> Optional[datetime]:
     """Parse timestamp string to datetime object."""
     if not timestamp:
@@ -115,30 +97,73 @@ def parse_timestamp(timestamp: str) -> Optional[datetime]:
         return None
 
 
-def calculate_time_spent(first_time: Optional[datetime], last_time: Optional[datetime]) -> str:
-    """Calculate time difference between first and last occurrence."""
-    if not first_time or not last_time:
+def calculate_estimated_time_spent(timestamps: List[datetime]) -> str:
+    """
+    Event-Density Model: Estimate time spent based on number of pixel events.
+    
+    Simple mapping based on event count:
+    - 1-2 events → 30-90 seconds
+    - 3-5 events → 2-4 minutes
+    - 6-10 events → 5-8 minutes
+    - 10+ events → 10-15 minutes
+    """
+    if not timestamps:
+        return ''
+    
+    num_events = len(timestamps)
+    
+    try:
+        # Map event count to estimated time range
+        if num_events == 1:
+            # Single event: 30 seconds
+            estimated_seconds = 30
+        elif num_events == 2:
+            # 2 events: 60 seconds (middle of 30-90 range)
+            estimated_seconds = 60
+        elif num_events <= 5:
+            # 3-5 events: 3 minutes (middle of 2-4 range)
+            estimated_seconds = 3 * 60
+        elif num_events <= 10:
+            # 6-10 events: 6.5 minutes (middle of 5-8 range)
+            estimated_seconds = 6.5 * 60
+        else:
+            # 10+ events: 12.5 minutes (middle of 10-15 range)
+            estimated_seconds = 12.5 * 60
+        
+        # Format output
+        if estimated_seconds < 60:
+            return f"{int(estimated_seconds)} seconds"
+        elif estimated_seconds < 3600:
+            minutes = int(estimated_seconds / 60)
+            seconds = int(estimated_seconds % 60)
+            if seconds > 0:
+                return f"{minutes} minutes {seconds} seconds"
+            else:
+                return f"{minutes} minutes"
+        else:
+            hours = int(estimated_seconds / 3600)
+            minutes = int((estimated_seconds % 3600) / 60)
+            return f"{hours} hours {minutes} minutes"
+    except Exception as e:
+        return ''
+
+
+def extract_date_from_timestamp(timestamp: str) -> str:
+    """Extract date (YYYY-MM-DD) from ActivityStartDate timestamp."""
+    if not timestamp:
         return ''
     
     try:
-        delta = last_time - first_time
-        total_seconds = int(delta.total_seconds())
-        
-        if total_seconds < 60:
-            return f"{total_seconds} seconds"
-        elif total_seconds < 3600:
-            minutes = total_seconds // 60
-            return f"{minutes} minutes"
-        elif total_seconds < 86400:
-            hours = total_seconds // 3600
-            minutes = (total_seconds % 3600) // 60
-            return f"{hours} hours {minutes} minutes"
-        else:
-            days = total_seconds // 86400
-            hours = (total_seconds % 86400) // 3600
-            return f"{days} days {hours} hours"
+        # Try ISO format first (2025-09-29T17:59:07Z)
+        if 'T' in timestamp:
+            date_part = timestamp.split('T')[0]
+            # Validate date format
+            datetime.strptime(date_part, '%Y-%m-%d')
+            return date_part
+        # Try other formats if needed
+        return timestamp.split()[0] if timestamp else ''
     except:
-        return ''
+        return timestamp.split()[0] if timestamp else ''
 
 
 def get_interest_level(occurrence_count: int) -> str:
@@ -172,8 +197,7 @@ def process_csv(input_file: str, output_file: str):
         'business_email': '',
         'linkedin_url': '',  # LinkedIn URL
         'occurrence_count': 0,  # Count of duplicate occurrences
-        'first_timestamp': None,  # First occurrence timestamp
-        'last_timestamp': None,  # Last occurrence timestamp
+        'timestamps': [],  # All timestamps for event-density calculation
     })
     
     # Read and process input CSV
@@ -218,15 +242,12 @@ def process_csv(input_file: str, output_file: str):
                 if activity_date:
                     person['DATE'] = extract_date_from_timestamp(activity_date)
             
-            # Track timestamps for time spent calculation
+            # Track timestamps for event-density model
             timestamp_str = row.get('ACTIVITY_START_DATE', '') or row.get('EVENT_TIMESTAMP', '')
             if timestamp_str:
                 timestamp = parse_timestamp(timestamp_str)
                 if timestamp:
-                    if person['first_timestamp'] is None or timestamp < person['first_timestamp']:
-                        person['first_timestamp'] = timestamp
-                    if person['last_timestamp'] is None or timestamp > person['last_timestamp']:
-                        person['last_timestamp'] = timestamp
+                    person['timestamps'].append(timestamp)
             
             # Extract LinkedIn URL (first occurrence)
             if not person['linkedin_url']:
@@ -346,11 +367,11 @@ def process_csv(input_file: str, output_file: str):
             if not personal_phone:
                 personal_phone = person['personal_phones'][0]
         
-        # Calculate time spent
-        time_spent = calculate_time_spent(person['first_timestamp'], person['last_timestamp'])
-        
         # Get interest level
         interest_level = get_interest_level(person['occurrence_count'])
+        
+        # Calculate estimated time spent using event-density model
+        estimated_time = calculate_estimated_time_spent(person['timestamps'])
         
         output_row = {
             'Date': person['DATE'],
@@ -367,7 +388,7 @@ def process_csv(input_file: str, output_file: str):
             'Business Email': person['business_email'] or '',
             'LinkedIn URL': person['linkedin_url'] or '',
             'Duplicate Occurrences': str(person['occurrence_count']),
-            'Time Spent on Website': time_spent,
+            'Estimated Time Spent': estimated_time,
             'Interest Level': interest_level,
         }
         
@@ -389,7 +410,7 @@ def process_csv(input_file: str, output_file: str):
         'Business Email',
         'LinkedIn URL',
         'Duplicate Occurrences',
-        'Time Spent on Website',
+        'Estimated Time Spent',
         'Interest Level'
     ]
     

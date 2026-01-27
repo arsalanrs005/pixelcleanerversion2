@@ -9,6 +9,7 @@ import os
 import tempfile
 import uuid
 import re
+import csv
 
 app = Flask(__name__)
 
@@ -85,6 +86,29 @@ def clean_csv():
                     'error': 'Output file was not created',
                     'details': result.stdout
                 }), 500
+            
+            # Read CSV data for preview
+            preview_data = []
+            try:
+                with open(output_path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    # Get first 100 rows for preview
+                    for i, row in enumerate(reader):
+                        if i >= 100:  # Limit preview to 100 rows
+                            break
+                        preview_data.append(row)
+            except Exception as e:
+                # If preview fails, continue with file download
+                preview_data = []
+            
+            # Check if client wants JSON preview (via query parameter)
+            if request.args.get('preview') == 'true':
+                return jsonify({
+                    'success': True,
+                    'filename': custom_filename,
+                    'preview': preview_data,
+                    'total_rows': len(preview_data)
+                })
             
             # Return the cleaned file with user-specified filename
             return send_file(

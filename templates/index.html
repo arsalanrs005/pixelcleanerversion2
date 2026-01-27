@@ -281,6 +281,83 @@
             color: #718096;
             margin-top: 5px;
         }
+
+        .results-preview {
+            display: none;
+            margin-top: 30px;
+            max-height: 500px;
+            overflow-y: auto;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            background: white;
+        }
+
+        .results-preview.show {
+            display: block;
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .results-table th {
+            background: #f7fafc;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #2d3748;
+            border-bottom: 2px solid #e2e8f0;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .results-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .results-table tr:hover {
+            background: #f7fafc;
+        }
+
+        .interest-highly {
+            background-color: #c6f6d5;
+            color: #22543d;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+
+        .interest-medium {
+            background-color: #fefcbf;
+            color: #744210;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+
+        .interest-not {
+            background-color: #fed7d7;
+            color: #742a2a;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+
+        .preview-header {
+            padding: 15px 20px;
+            background: #f7fafc;
+            border-bottom: 2px solid #e2e8f0;
+            font-weight: 600;
+            color: #2d3748;
+            border-radius: 10px 10px 0 0;
+        }
     </style>
 </head>
 <body>
@@ -347,6 +424,18 @@
             <strong>✗ Error processing file</strong>
             <p style="margin-top: 10px; font-size: 14px;" id="errorText"></p>
         </div>
+
+        <div class="results-preview" id="resultsPreview">
+            <div class="preview-header">
+                📊 Results Preview (First 100 rows)
+            </div>
+            <div style="overflow-x: auto;">
+                <table class="results-table" id="resultsTable">
+                    <thead id="resultsTableHead"></thead>
+                    <tbody id="resultsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -368,6 +457,9 @@
         const errorText = document.getElementById('errorText');
         const filenameInput = document.getElementById('filenameInput');
         const filenameContainer = document.getElementById('filenameContainer');
+        const resultsPreview = document.getElementById('resultsPreview');
+        const resultsTableHead = document.getElementById('resultsTableHead');
+        const resultsTableBody = document.getElementById('resultsTableBody');
 
         // Drag and drop handlers
         uploadArea.addEventListener('dragover', (e) => {
@@ -417,6 +509,7 @@
             processBtn.disabled = false;
             successMessage.classList.remove('show');
             errorMessage.classList.remove('show');
+            resultsPreview.classList.remove('show');
         }
 
         function formatFileSize(bytes) {
@@ -439,6 +532,7 @@
             progressFill.style.width = '30%';
             successMessage.classList.remove('show');
             errorMessage.classList.remove('show');
+            resultsPreview.classList.remove('show');
 
             const formData = new FormData();
             formData.append('file', selectedFile);
@@ -453,13 +547,36 @@
                 progressFill.style.width = '50%';
                 progressText.textContent = 'Uploading file...';
 
+                // First, get preview data
+                const previewFormData = new FormData();
+                previewFormData.append('file', selectedFile);
+                if (customFilename) {
+                    previewFormData.append('filename', customFilename);
+                }
+
+                const previewResponse = await fetch('/clean?preview=true', {
+                    method: 'POST',
+                    body: previewFormData
+                });
+
+                progressFill.style.width = '70%';
+                progressText.textContent = 'Processing file...';
+
+                if (previewResponse.ok) {
+                    const previewData = await previewResponse.json();
+                    if (previewData.preview && previewData.preview.length > 0) {
+                        displayPreview(previewData.preview);
+                    }
+                }
+
+                // Now get the file for download
+                progressFill.style.width = '85%';
+                progressText.textContent = 'Preparing download...';
+
                 const response = await fetch('/clean', {
                     method: 'POST',
                     body: formData
                 });
-
-                progressFill.style.width = '80%';
-                progressText.textContent = 'Processing file...';
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({ error: 'Unknown error occurred' }));
@@ -473,7 +590,6 @@
                 processedFileBlob = await response.blob();
                 
                 // Use custom filename if provided, otherwise use default
-                const customFilename = filenameInput.value.trim();
                 processedFileName = customFilename || selectedFile.name.replace(/\.(csv|ai)$/i, '_cleaned.csv');
 
                 // Show success message
@@ -491,6 +607,60 @@
                 processBtn.disabled = false;
                 progressFill.style.width = '0%';
             }
+        }
+
+        function displayPreview(data) {
+            if (!data || data.length === 0) return;
+
+            // Get column headers from first row
+            const headers = Object.keys(data[0]);
+            
+            // Clear existing content
+            resultsTableHead.innerHTML = '';
+            resultsTableBody.innerHTML = '';
+
+            // Create header row
+            const headerRow = document.createElement('tr');
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header;
+                headerRow.appendChild(th);
+            });
+            resultsTableHead.appendChild(headerRow);
+
+            // Create data rows
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                headers.forEach(header => {
+                    const td = document.createElement('td');
+                    const value = row[header] || '';
+                    
+                    // Special handling for Interest Level column
+                    if (header === 'Interest Level') {
+                        const span = document.createElement('span');
+                        if (value === 'Highly Interested') {
+                            span.className = 'interest-highly';
+                            span.textContent = value;
+                        } else if (value === 'Medium') {
+                            span.className = 'interest-medium';
+                            span.textContent = value;
+                        } else if (value === 'Not Interested') {
+                            span.className = 'interest-not';
+                            span.textContent = value;
+                        } else {
+                            span.textContent = value;
+                        }
+                        td.appendChild(span);
+                    } else {
+                        td.textContent = value;
+                    }
+                    tr.appendChild(td);
+                });
+                resultsTableBody.appendChild(tr);
+            });
+
+            // Show preview
+            resultsPreview.classList.add('show');
         }
 
         function downloadFile() {

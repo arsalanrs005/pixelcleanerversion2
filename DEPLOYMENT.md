@@ -240,3 +240,4 @@ After successful deployment:
 
 **Congratulations!** Your Pixel Cleaner is now live on Render! 🎉
 
+
