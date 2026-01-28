@@ -97,53 +97,48 @@ def parse_timestamp(timestamp: str) -> Optional[datetime]:
         return None
 
 
-def calculate_estimated_time_spent(timestamps: List[datetime]) -> str:
+def calculate_actual_time_spent(activity_periods: List[Tuple[Optional[datetime], Optional[datetime]]]) -> str:
     """
-    Event-Density Model: Estimate time spent based on number of pixel events.
-    
-    Simple mapping based on event count:
-    - 1-2 events → 30-90 seconds
-    - 3-5 events → 2-4 minutes
-    - 6-10 events → 5-8 minutes
-    - 10+ events → 10-15 minutes
+    Calculate actual time spent by summing ACTIVITY_START_DATE to ACTIVITY_END_DATE 
+    differences across all occurrences.
     """
-    if not timestamps:
+    if not activity_periods:
         return ''
     
-    num_events = len(timestamps)
+    total_seconds = 0
     
     try:
-        # Map event count to estimated time range
-        if num_events == 1:
-            # Single event: 30 seconds
-            estimated_seconds = 30
-        elif num_events == 2:
-            # 2 events: 60 seconds (middle of 30-90 range)
-            estimated_seconds = 60
-        elif num_events <= 5:
-            # 3-5 events: 3 minutes (middle of 2-4 range)
-            estimated_seconds = 3 * 60
-        elif num_events <= 10:
-            # 6-10 events: 6.5 minutes (middle of 5-8 range)
-            estimated_seconds = 6.5 * 60
-        else:
-            # 10+ events: 12.5 minutes (middle of 10-15 range)
-            estimated_seconds = 12.5 * 60
+        for start_time, end_time in activity_periods:
+            if start_time and end_time:
+                # Calculate time difference for this occurrence
+                delta = end_time - start_time
+                seconds = delta.total_seconds()
+                # Only add positive time differences
+                if seconds > 0:
+                    total_seconds += seconds
+        
+        # If no valid periods found, return empty
+        if total_seconds == 0:
+            return ''
         
         # Format output
-        if estimated_seconds < 60:
-            return f"{int(estimated_seconds)} seconds"
-        elif estimated_seconds < 3600:
-            minutes = int(estimated_seconds / 60)
-            seconds = int(estimated_seconds % 60)
+        if total_seconds < 60:
+            return f"{int(total_seconds)} seconds"
+        elif total_seconds < 3600:
+            minutes = int(total_seconds / 60)
+            seconds = int(total_seconds % 60)
             if seconds > 0:
                 return f"{minutes} minutes {seconds} seconds"
             else:
                 return f"{minutes} minutes"
-        else:
-            hours = int(estimated_seconds / 3600)
-            minutes = int((estimated_seconds % 3600) / 60)
+        elif total_seconds < 86400:
+            hours = int(total_seconds / 3600)
+            minutes = int((total_seconds % 3600) / 60)
             return f"{hours} hours {minutes} minutes"
+        else:
+            days = int(total_seconds / 86400)
+            hours = int((total_seconds % 86400) / 3600)
+            return f"{days} days {hours} hours"
     except Exception as e:
         return ''
 
@@ -197,7 +192,7 @@ def process_csv(input_file: str, output_file: str):
         'business_email': '',
         'linkedin_url': '',  # LinkedIn URL
         'occurrence_count': 0,  # Count of duplicate occurrences
-        'timestamps': [],  # All timestamps for event-density calculation
+        'activity_periods': [],  # List of (start, end) tuples for actual time calculation
     })
     
     # Read and process input CSV
@@ -242,12 +237,16 @@ def process_csv(input_file: str, output_file: str):
                 if activity_date:
                     person['DATE'] = extract_date_from_timestamp(activity_date)
             
-            # Track timestamps for event-density model
-            timestamp_str = row.get('ACTIVITY_START_DATE', '') or row.get('EVENT_TIMESTAMP', '')
-            if timestamp_str:
-                timestamp = parse_timestamp(timestamp_str)
-                if timestamp:
-                    person['timestamps'].append(timestamp)
+            # Track activity periods for actual time calculation
+            start_str = row.get('ACTIVITY_START_DATE', '') or row.get('ActivityStartDate', '')
+            end_str = row.get('ACTIVITY_END_DATE', '') or row.get('ActivityEndDate', '')
+            
+            if start_str or end_str:
+                start_time = parse_timestamp(start_str) if start_str else None
+                end_time = parse_timestamp(end_str) if end_str else None
+                # Only add if we have at least a start time
+                if start_time or end_time:
+                    person['activity_periods'].append((start_time, end_time))
             
             # Extract LinkedIn URL (first occurrence)
             if not person['linkedin_url']:
@@ -370,8 +369,16 @@ def process_csv(input_file: str, output_file: str):
         # Get interest level
         interest_level = get_interest_level(person['occurrence_count'])
         
-        # Calculate estimated time spent using event-density model
-        estimated_time = calculate_estimated_time_spent(person['timestamps'])
+        # Calculate actual time spent from ACTIVITY_START_DATE and ACTIVITY_END_DATE
+        actual_time = calculate_actual_time_spent(person['activity_periods'])
+        
+        # Add color indicator emoji to interest level for CSV
+        if interest_level == 'Highly Interested':
+            interest_level_with_color = '🟢 Highly Interested'
+        elif interest_level == 'Medium':
+            interest_level_with_color = '🟡 Medium'
+        else:
+            interest_level_with_color = '🔴 Not Interested'
         
         output_row = {
             'Date': person['DATE'],
@@ -388,8 +395,8 @@ def process_csv(input_file: str, output_file: str):
             'Business Email': person['business_email'] or '',
             'LinkedIn URL': person['linkedin_url'] or '',
             'Duplicate Occurrences': str(person['occurrence_count']),
-            'Estimated Time Spent': estimated_time,
-            'Interest Level': interest_level,
+            'Time Spent': actual_time,
+            'Interest Level': interest_level_with_color,
         }
         
         output_rows.append(output_row)
@@ -410,7 +417,7 @@ def process_csv(input_file: str, output_file: str):
         'Business Email',
         'LinkedIn URL',
         'Duplicate Occurrences',
-        'Estimated Time Spent',
+        'Time Spent',
         'Interest Level'
     ]
     

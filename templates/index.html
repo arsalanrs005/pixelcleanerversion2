@@ -638,15 +638,17 @@
                     // Special handling for Interest Level column
                     if (header === 'Interest Level') {
                         const span = document.createElement('span');
-                        if (value === 'Highly Interested') {
+                        // Handle both with and without emoji
+                        if (value.includes('🟢') || value === 'Highly Interested' || value.startsWith('Highly Interested')) {
                             span.className = 'interest-highly';
-                            span.textContent = value;
-                        } else if (value === 'Medium') {
+                            // Remove emoji for display, keep text
+                            span.textContent = value.replace('🟢 ', '').replace('🟢', '');
+                        } else if (value.includes('🟡') || value === 'Medium' || value.startsWith('Medium')) {
                             span.className = 'interest-medium';
-                            span.textContent = value;
-                        } else if (value === 'Not Interested') {
+                            span.textContent = value.replace('🟡 ', '').replace('🟡', '');
+                        } else if (value.includes('🔴') || value === 'Not Interested' || value.startsWith('Not Interested')) {
                             span.className = 'interest-not';
-                            span.textContent = value;
+                            span.textContent = value.replace('🔴 ', '').replace('🔴', '');
                         } else {
                             span.textContent = value;
                         }

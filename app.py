@@ -87,16 +87,17 @@ def clean_csv():
                     'details': result.stdout
                 }), 500
             
-            # Read CSV data for preview
+            # Read CSV data for preview (maintain exact order from CSV)
             preview_data = []
             try:
                 with open(output_path, 'r', encoding='utf-8') as f:
                     reader = csv.DictReader(f)
-                    # Get first 100 rows for preview
+                    # Get first 100 rows for preview in exact CSV order
                     for i, row in enumerate(reader):
                         if i >= 100:  # Limit preview to 100 rows
                             break
-                        preview_data.append(row)
+                        # Preserve order by appending in sequence
+                        preview_data.append(dict(row))  # Ensure it's a new dict to preserve order
             except Exception as e:
                 # If preview fails, continue with file download
                 preview_data = []
