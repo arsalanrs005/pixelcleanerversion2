@@ -191,6 +191,7 @@ def process_csv(input_file: str, output_file: str):
         'personal_email': '',
         'business_email': '',
         'linkedin_url': '',  # LinkedIn URL
+        'sha256': '',  # HEM_SHA256 from first occurrence
         'occurrence_count': 0,  # Count of duplicate occurrences
         'activity_periods': [],  # List of (start, end) tuples for actual time calculation
     })
@@ -237,16 +238,22 @@ def process_csv(input_file: str, output_file: str):
                 if activity_date:
                     person['DATE'] = extract_date_from_timestamp(activity_date)
             
-            # Track activity periods for actual time calculation
+            # Track activity periods for actual time calculation (ALL occurrences)
             start_str = row.get('ACTIVITY_START_DATE', '') or row.get('ActivityStartDate', '')
             end_str = row.get('ACTIVITY_END_DATE', '') or row.get('ActivityEndDate', '')
             
-            if start_str or end_str:
-                start_time = parse_timestamp(start_str) if start_str else None
-                end_time = parse_timestamp(end_str) if end_str else None
-                # Only add if we have at least a start time
-                if start_time or end_time:
-                    person['activity_periods'].append((start_time, end_time))
+            # Always try to parse and add activity periods for each occurrence
+            start_time = parse_timestamp(start_str) if start_str else None
+            end_time = parse_timestamp(end_str) if end_str else None
+            # Add period if we have at least start or end time
+            if start_time or end_time:
+                person['activity_periods'].append((start_time, end_time))
+            
+            # Extract SHA256 (first occurrence)
+            if not person['sha256']:
+                sha256_val = row.get('HEM_SHA256', '').strip()
+                if sha256_val:
+                    person['sha256'] = sha256_val
             
             # Extract LinkedIn URL (first occurrence)
             if not person['linkedin_url']:
@@ -369,9 +376,6 @@ def process_csv(input_file: str, output_file: str):
         # Get interest level
         interest_level = get_interest_level(person['occurrence_count'])
         
-        # Calculate actual time spent from ACTIVITY_START_DATE and ACTIVITY_END_DATE
-        actual_time = calculate_actual_time_spent(person['activity_periods'])
-        
         # Add color indicator emoji to interest level for CSV
         if interest_level == 'Highly Interested':
             interest_level_with_color = '🟢 Highly Interested'
@@ -394,8 +398,8 @@ def process_csv(input_file: str, output_file: str):
             'Personal Email': person['personal_email'] or '',
             'Business Email': person['business_email'] or '',
             'LinkedIn URL': person['linkedin_url'] or '',
+            'SHA256': person['sha256'] or '',
             'Duplicate Occurrences': str(person['occurrence_count']),
-            'Time Spent': actual_time,
             'Interest Level': interest_level_with_color,
         }
         
@@ -416,8 +420,8 @@ def process_csv(input_file: str, output_file: str):
         'Personal Email',
         'Business Email',
         'LinkedIn URL',
+        'SHA256',
         'Duplicate Occurrences',
-        'Time Spent',
         'Interest Level'
     ]
     
