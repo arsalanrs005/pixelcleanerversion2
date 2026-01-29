@@ -40,6 +40,17 @@ def clean_csv():
     if not (file.filename.endswith('.csv') or file.filename.endswith('.ai')):
         return jsonify({'error': 'File must be a CSV file (.csv or .ai)'}), 400
     
+    # Check file size before processing (limit to 500MB for free tier)
+    file.seek(0, os.SEEK_END)
+    file_size = file.tell()
+    file.seek(0)  # Reset file pointer
+    max_file_size = 500 * 1024 * 1024  # 500MB limit
+    
+    if file_size > max_file_size:
+        return jsonify({
+            'error': f'File too large. Maximum size is 500MB. Your file is {file_size / (1024*1024):.1f}MB.'
+        }), 413
+    
     # Get custom filename from form data
     custom_filename = request.form.get('filename', '').strip()
     
@@ -67,11 +78,14 @@ def clean_csv():
         
         try:
             # Run the pixelcleaner script with increased timeout for large files
+            # Use longer timeout for very large files
+            timeout_seconds = 1800 if file_size > 100 * 1024 * 1024 else 900  # 30 min for >100MB, 15 min otherwise
+            
             result = subprocess.run(
                 ['python3', 'pixelcleaner.py', input_path, output_path],
                 capture_output=True,
                 text=True,
-                timeout=900  # 15 minute timeout for large files
+                timeout=timeout_seconds
             )
             
             if result.returncode != 0:
@@ -88,24 +102,25 @@ def clean_csv():
                 }), 500
             
             # Read CSV data for preview (maintain exact order from CSV)
-            # Skip preview for very large files to save memory
+            # Skip preview for very large files to save memory and time
             preview_data = []
-            file_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
-            max_preview_size = 50 * 1024 * 1024  # 50MB - skip preview for files larger than this
+            output_file_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
+            max_preview_size = 10 * 1024 * 1024  # 10MB - skip preview for files larger than this
             
-            try:
-                if file_size < max_preview_size:
+            # Skip preview entirely for large files to avoid timeout
+            if output_file_size < max_preview_size:
+                try:
                     with open(output_path, 'r', encoding='utf-8') as f:
                         reader = csv.DictReader(f)
-                        # Get first 100 rows for preview in exact CSV order
+                        # Get first 50 rows for preview (reduced from 100 to save time)
                         for i, row in enumerate(reader):
-                            if i >= 100:  # Limit preview to 100 rows
+                            if i >= 50:  # Limit preview to 50 rows
                                 break
                             # Preserve order by appending in sequence
                             preview_data.append(dict(row))  # Ensure it's a new dict to preserve order
-            except Exception as e:
-                # If preview fails, continue with file download
-                preview_data = []
+                except Exception as e:
+                    # If preview fails, continue with file download
+                    preview_data = []
             
             # Check if client wants JSON preview (via query parameter)
             if request.args.get('preview') == 'true':

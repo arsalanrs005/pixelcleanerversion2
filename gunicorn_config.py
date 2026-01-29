@@ -11,8 +11,9 @@ backlog = 2048
 workers = 1
 worker_class = "sync"
 worker_connections = 1000
-timeout = 600  # 10 minutes timeout for large file processing
+timeout = 1200  # 20 minutes timeout for very large file processing
 keepalive = 5
+graceful_timeout = 30  # Give workers 30 seconds to finish before killing
 
 # Memory optimization
 max_requests = 1000  # Restart workers after this many requests to prevent memory leaks
