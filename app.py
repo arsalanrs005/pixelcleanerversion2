@@ -66,12 +66,12 @@ def clean_csv():
         file.save(input_path)
         
         try:
-            # Run the pixelcleaner script
+            # Run the pixelcleaner script with increased timeout for large files
             result = subprocess.run(
                 ['python3', 'pixelcleaner.py', input_path, output_path],
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 minute timeout
+                timeout=900  # 15 minute timeout for large files
             )
             
             if result.returncode != 0:
@@ -88,16 +88,21 @@ def clean_csv():
                 }), 500
             
             # Read CSV data for preview (maintain exact order from CSV)
+            # Skip preview for very large files to save memory
             preview_data = []
+            file_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
+            max_preview_size = 50 * 1024 * 1024  # 50MB - skip preview for files larger than this
+            
             try:
-                with open(output_path, 'r', encoding='utf-8') as f:
-                    reader = csv.DictReader(f)
-                    # Get first 100 rows for preview in exact CSV order
-                    for i, row in enumerate(reader):
-                        if i >= 100:  # Limit preview to 100 rows
-                            break
-                        # Preserve order by appending in sequence
-                        preview_data.append(dict(row))  # Ensure it's a new dict to preserve order
+                if file_size < max_preview_size:
+                    with open(output_path, 'r', encoding='utf-8') as f:
+                        reader = csv.DictReader(f)
+                        # Get first 100 rows for preview in exact CSV order
+                        for i, row in enumerate(reader):
+                            if i >= 100:  # Limit preview to 100 rows
+                                break
+                            # Preserve order by appending in sequence
+                            preview_data.append(dict(row))  # Ensure it's a new dict to preserve order
             except Exception as e:
                 # If preview fails, continue with file download
                 preview_data = []
