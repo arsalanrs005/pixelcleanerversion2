@@ -385,9 +385,6 @@
             <div class="logo-icon">🎯</div>
         </div>
         <p class="subtitle">Clean and deduplicate your Pixel export CSV files</p>
-        <div style="background: #fef3c7; border: 2px solid #f59e0b; border-radius: 8px; padding: 12px; margin-bottom: 20px; font-size: 14px; color: #92400e;">
-            <strong>⚠️ Note:</strong> Render free tier has a 2-minute timeout limit. Files larger than ~50MB may timeout. For large files, consider splitting them or upgrading to Starter plan.
-        </div>
 
         <div class="upload-area" id="uploadArea">
             <div class="upload-icon">📄</div>
@@ -568,31 +565,9 @@
                 progressFill.style.width = '50%';
                 progressText.textContent = 'Uploading file...';
 
-                // First, get preview data
-                const previewFormData = new FormData();
-                previewFormData.append('file', selectedFile);
-                if (customFilename) {
-                    previewFormData.append('filename', customFilename);
-                }
-
-                const previewResponse = await fetch('/clean?preview=true', {
-                    method: 'POST',
-                    body: previewFormData
-                });
-
+                // Get the file directly (skip separate preview request to avoid double processing)
                 progressFill.style.width = '70%';
                 progressText.textContent = 'Processing file...';
-
-                if (previewResponse.ok) {
-                    const previewData = await previewResponse.json();
-                    if (previewData.preview && previewData.preview.length > 0) {
-                        displayPreview(previewData.preview);
-                    }
-                }
-
-                // Now get the file for download
-                progressFill.style.width = '85%';
-                progressText.textContent = 'Preparing download...';
 
                 const response = await fetch('/clean', {
                     method: 'POST',
@@ -604,14 +579,47 @@
                     throw new Error(errorData.error || `Server error: ${response.status}`);
                 }
 
-                progressFill.style.width = '100%';
-                progressText.textContent = 'Complete!';
+                progressFill.style.width = '90%';
+                progressText.textContent = 'Preparing download...';
 
                 // Get the file blob
                 processedFileBlob = await response.blob();
                 
                 // Use custom filename if provided, otherwise use default
                 processedFileName = customFilename || selectedFile.name.replace(/\.(csv|ai)$/i, '_cleaned.csv');
+                
+                // Try to extract preview from the blob if it's not too large
+                try {
+                    if (processedFileBlob.size < 10 * 1024 * 1024) { // Only for files < 10MB
+                        const text = await processedFileBlob.text();
+                        const lines = text.split('\n');
+                        if (lines.length > 1) {
+                            const headers = lines[0].split(',');
+                            const previewRows = [];
+                            for (let i = 1; i < Math.min(51, lines.length); i++) {
+                                if (lines[i].trim()) {
+                                    const values = lines[i].split(',');
+                                    const row = {};
+                                    headers.forEach((header, idx) => {
+                                        row[header.trim()] = values[idx] ? values[idx].trim() : '';
+                                    });
+                                    previewRows.push(row);
+                                }
+                            }
+                            if (previewRows.length > 0) {
+                                displayPreview(previewRows);
+                            }
+                        }
+                        // Recreate blob from text
+                        processedFileBlob = new Blob([text], { type: 'text/csv' });
+                    }
+                } catch (e) {
+                    // If preview extraction fails, just continue without preview
+                    console.log('Preview extraction skipped:', e);
+                }
+
+                progressFill.style.width = '100%';
+                progressText.textContent = 'Complete!';
 
                 // Show success message
                 setTimeout(() => {
