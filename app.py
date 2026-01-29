@@ -40,15 +40,16 @@ def clean_csv():
     if not (file.filename.endswith('.csv') or file.filename.endswith('.ai')):
         return jsonify({'error': 'File must be a CSV file (.csv or .ai)'}), 400
     
-    # Check file size before processing (limit to 500MB for free tier)
+    # Check file size before processing
     file.seek(0, os.SEEK_END)
     file_size = file.tell()
     file.seek(0)  # Reset file pointer
     max_file_size = 500 * 1024 * 1024  # 500MB limit
+    warning_size = 50 * 1024 * 1024  # 50MB - warn about potential timeout
     
     if file_size > max_file_size:
         return jsonify({
-            'error': f'File too large. Maximum size is 500MB. Your file is {file_size / (1024*1024):.1f}MB.'
+            'error': f'File too large. Maximum size is 500MB. Your file is {file_size / (1024*1024):.1f}MB. Please split into smaller files or upgrade to Render Starter plan.'
         }), 413
     
     # Get custom filename from form data

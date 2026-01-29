@@ -212,7 +212,8 @@ def process_csv(input_file: str, output_file: str):
         
         for row in reader:
             row_count += 1
-            if row_count % 1000 == 0:
+            # Reduce print frequency for large files to save time
+            if row_count % 5000 == 0:
                 print(f'   Processed {row_count} rows...')
             
             first_name = clean_value(row.get('FIRST_NAME', '')).upper()
